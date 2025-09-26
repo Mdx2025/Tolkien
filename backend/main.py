@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 
 # ---- third-party (sign & submit) ----
 from solders.keypair import Keypair
@@ -24,6 +25,7 @@ PRIORITY_FEE        = float(os.getenv("PRIORITY_FEE", "0.000001"))
 TOKEN_MINT          = os.getenv("TOKEN_MINT", "").strip()
 HELIUS_API_KEY      = os.getenv("HELIUS_API_KEY", "").strip()
 FRONTEND_ORIGIN     = os.getenv("FRONTEND_ORIGIN", "").strip()
+TOKEN_INITIAL_SUPPLY = float(os.getenv("TOKEN_INITIAL_SUPPLY", "0") or 0.0)  # human units (e.g., 1_000_000_000)
 
 if not (WALLET_ADDRESS and WALLET_PRIVATE_KEY and TOKEN_MINT and SOLANA_RPC_URL):
     print("[WARN] Missing critical .env values. Claim/Buy/Burn will fail until provided.")
@@ -156,6 +158,25 @@ def refresh_market_data():
     market_cap = None
     volume_change = None
 
+    # Helper: fetch current token supply from RPC (reflects burns)
+    def _rpc_token_supply(mint: str) -> tuple[float, int]:
+        try:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenSupply",
+                "params": [mint, {"commitment": "confirmed"}],
+            }
+            r = requests.post(SOLANA_RPC_URL, json=payload, timeout=20)
+            r.raise_for_status()
+            val = (r.json().get("result") or {}).get("value") or {}
+            amount_raw = float(val.get("amount") or 0)
+            decimals = int(val.get("decimals") or 0)
+            return amount_raw, decimals
+        except Exception as e:
+            print(f"[rpc] getTokenSupply failed: {e}")
+            return 0.0, 0
+
     # Use DexScreener as primary source
     pair_id = "HV6X26GhkNyUksCEVxReraQU8CLJV8nkiLBq1UEBEvzH"
     
@@ -171,8 +192,13 @@ def refresh_market_data():
             market_cap = float(pair.get("fdv", 0)) or float(pair.get("marketCap", 0))
             volume_change = pair.get("priceChange", {}).get("h24")  # 24h price change
             
-            if not market_cap and price > 0:
-                # Estimate market cap if not available (1B token supply estimate)
+            # Prefer computing MC from on-chain supply so burns are included
+            supply_raw, supply_decimals = _rpc_token_supply(TOKEN_MINT) if TOKEN_MINT else (0.0, 0)
+            if price > 0 and supply_raw > 0:
+                supply_tokens = supply_raw / (10 ** supply_decimals)
+                market_cap = price * supply_tokens
+            elif not market_cap and price > 0:
+                # Fallback estimate if RPC supply missing
                 estimated_supply = 1_000_000_000
                 market_cap = price * estimated_supply
                 
@@ -206,6 +232,15 @@ def refresh_market_data():
         STATE["price_usd"] = round(float(price), 12)  # More precision for small prices
         STATE["market_cap_usd"] = round(float(market_cap or 0.0), 2)
         STATE["volume_change_pct"] = round(float(volume_change or 0.0), 2)
+
+        # Compute supply burned % if we know initial supply and can fetch current supply
+        if TOKEN_MINT and TOKEN_INITIAL_SUPPLY > 0:
+            cur_raw, cur_dec = _rpc_token_supply(TOKEN_MINT)
+            if cur_raw > 0:
+                cur_tokens = cur_raw / (10 ** cur_dec)
+                burn_pct = max(0.0, min(100.0, (1.0 - (cur_tokens / float(TOKEN_INITIAL_SUPPLY))) * 100.0))
+                STATE["supply_burned_pct"] = round(burn_pct, 4)
+
         _last_helius_t = now
     else:
         # Keep existing state; do not advance cache TTL so next call re-attempts soon
@@ -328,6 +363,10 @@ class Dashboard(BaseModel):
     transactions: list
     token_mint: str
 
+class DevAdjust(BaseModel):
+    amount_usd: float
+    note: Optional[str] = None
+
 # ---------- Endpoints ----------
 @app.get("/dashboard", response_model=Dashboard)
 def get_dashboard():
@@ -390,3 +429,24 @@ def debug_market_data():
     }
     
     return debug_info
+
+# ---------- Dev helpers to populate pills ----------
+@app.post("/dev/buyback")
+def dev_buyback(adjust: DevAdjust):
+    amt = max(0.0, float(adjust.amount_usd or 0.0))
+    if amt <= 0:
+        return {"ok": False, "error": "amount_usd must be > 0"}
+    STATE["buybacks_usd"] += amt
+    push_tx("buyback", amt / max(STATE.get("price_usd") or 1, 1e-9), adjust.note or "Dev buyback credit")
+    return {"ok": True, "buybacks_usd": STATE["buybacks_usd"]}
+
+@app.post("/dev/burn")
+def dev_burn(adjust: DevAdjust):
+    amt = max(0.0, float(adjust.amount_usd or 0.0))
+    if amt <= 0:
+        return {"ok": False, "error": "amount_usd must be > 0"}
+    STATE["burned_usd"] += amt
+    push_tx("burn", amt / max(STATE.get("price_usd") or 1, 1e-9), adjust.note or "Dev burn credit")
+    # Optionally nudge supply_burned_pct slightly to reflect action visually
+    STATE["supply_burned_pct"] = round(min(100.0, STATE["supply_burned_pct"] + 0.01), 4)
+    return {"ok": True, "burned_usd": STATE["burned_usd"]}
