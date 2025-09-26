@@ -8,10 +8,19 @@ function $(id){ return document.getElementById(id); }
 const fmtUSD = (n) => `$${(Number(n)||0).toLocaleString(undefined,{maximumFractionDigits:2})}`;
 const fmtPct = (n) => `${(n>=0?'+':'')}${Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1})}%`;
 
+// Special price formatter for very small numbers
+const fmtPrice = (n) => {
+  const p = Number(n) || 0;
+  if (p >= 0.01) return `$${p.toFixed(4)}`;
+  if (p >= 0.000001) return `$${p.toFixed(8)}`;
+  if (p > 0) return `$${p.toExponential(2)}`;
+  return '$0.00';
+};
+
 function setWidth(el, pct){ if(!el) return; const v=Math.max(0, Math.min(100, Number(pct)||0)); el.style.width=`${v}%`; }
 
 function renderDashboard(d){
-  if ($('statPrice'))    $('statPrice').textContent    = fmtUSD(d.price_usd);
+  if ($('statPrice'))    $('statPrice').textContent    = fmtPrice(d.price_usd);
   if ($('statVolume'))   $('statVolume').textContent   = fmtPct(d.volume_change_pct);
   if ($('statBuybacks')) $('statBuybacks').textContent = fmtUSD(d.buybacks_usd);
   if ($('statBurned'))   $('statBurned').textContent   = fmtUSD(d.burned_usd);
