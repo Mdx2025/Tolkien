@@ -146,87 +146,69 @@ def _dexscreener_price_from_pair(pair_id: str) -> tuple[float, Optional[float]]:
         return 0.0, None
 
 def refresh_market_data():
-    """Refresh STATE.price_usd / market_cap_usd using DexScreener primarily, with Helius fallback."""
+    """Refresh STATE.price_usd / market_cap_usd using DexScreener primarily."""
     global _last_helius_t
     now = time.time()
     if now - _last_helius_t < _HELIUS_CACHE_TTL:
         return
 
     price = None
-    supply = None
-    decimals = 6  # default for most tokens
     market_cap = None
+    volume_change = None
 
-    # 1) Try DexScreener first (it has both price AND market cap)
+    # Use DexScreener as primary source
     pair_id = "HV6X26GhkNyUksCEVxReraQU8CLJV8nkiLBq1UEBEvzH"
-    ds_price, chg24 = _dexscreener_price_from_pair(pair_id)
-    if ds_price > 0:
-        price = ds_price
-        STATE["volume_change_pct"] = float(chg24 or 0.0)
+    
+    try:
+        url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_id}"
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
         
-        # Get market cap from DexScreener too
-        try:
-            url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_id}"
-            r = requests.get(url, timeout=15)
-            r.raise_for_status()
-            data = r.json()
-            if data.get("pairs") and len(data["pairs"]) > 0:
-                pair = data["pairs"][0]
-                market_cap = float(pair.get("fdv", 0)) or float(pair.get("marketCap", 0))
-                if market_cap > 0:
-                    print(f"[dexscreener] success: price=${price}, mc=${market_cap:,.2f}, change24h={chg24}%")
-                else:
-                    # Estimate market cap if not available
-                    estimated_supply = 1_000_000_000  # 1B tokens (common default)
-                    market_cap = price * estimated_supply
-                    print(f"[dexscreener] success: price=${price}, estimated_mc=${market_cap:,.2f}")
-        except Exception as e:
-            print(f"[dexscreener] market cap fetch failed: {e}")
-            # Estimate market cap
-            estimated_supply = 1_000_000_000
-            market_cap = price * estimated_supply
-
-    # 2) Try Helius as fallback (if DexScreener failed)
-    if not price and HELIUS_API_KEY and HELIUS_API_KEY not in ["PLACEHOLDER", "YOUR_HELIUS_API_KEY_HERE"] and TOKEN_MINT:
-        try:
-            url = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
-            payload = {
-                "jsonrpc": "2.0", "id": "1", "method": "getAsset",
-                "params": {"id": TOKEN_MINT, "displayOptions": {"showFungibleTokens": True}}
-            }
-            r = requests.post(url, json=payload, timeout=20)
-            r.raise_for_status()
-            res = r.json().get("result") or {}
-            tinfo = res.get("token_info") or {}
-            pinfo = tinfo.get("price_info") or {}
-            price = pinfo.get("price_per_token")   # may be None
-            supply = tinfo.get("supply")
-            decimals = int(tinfo.get("decimals") or 6)
+        if data.get("pairs") and len(data["pairs"]) > 0:
+            pair = data["pairs"][0]
+            price = float(pair.get("priceUsd", 0))
+            market_cap = float(pair.get("fdv", 0)) or float(pair.get("marketCap", 0))
+            volume_change = pair.get("priceChange", {}).get("h24")  # 24h price change
             
-            if price and float(price) > 0 and supply:
-                adjusted_supply = float(supply) / (10 ** decimals)
-                market_cap = float(price) * adjusted_supply
-                print(f"[helius] success: price=${price}, mc=${market_cap:,.2f}")
+            if not market_cap and price > 0:
+                # Estimate market cap if not available (1B token supply estimate)
+                estimated_supply = 1_000_000_000
+                market_cap = price * estimated_supply
+                
+            if volume_change is not None:
+                try:
+                    volume_change = float(volume_change)
+                except (ValueError, TypeError):
+                    volume_change = 0.0
             else:
-                print(f"[helius] incomplete data for token: {TOKEN_MINT}")
-                price = None
-        except Exception as e:
-            print(f"[helius] warn: {e}")
-            price = None
+                volume_change = 0.0
+                
+            if price > 0:
+                print(f"[dexscreener] success: price=${price:.8f}, mc=${market_cap:,.2f}, change24h={volume_change:.2f}%")
+            else:
+                print(f"[dexscreener] no price data available")
+        else:
+            print(f"[dexscreener] no pairs found for pair_id: {pair_id}")
+            
+    except Exception as e:
+        print(f"[dexscreener] failed: {e}")
 
-    # 3) Development fallback (if still no price and using placeholder token)
+    # Fallback to development mock data if needed
     if not price and TOKEN_MINT in ["THE_TOKEN_MINT_ADDRESS", "YOUR_TOKEN_MINT_ADDRESS_HERE", ""]:
         price = 0.000123
         market_cap = 45000.0
+        volume_change = 5.2
         print("[mock] Using development mock data")
 
-    # 4) Store results
-    STATE["price_usd"] = round(float(price or 0.0), 8)
+    # Store results
+    STATE["price_usd"] = round(float(price or 0.0), 12)  # More precision for small prices
     STATE["market_cap_usd"] = round(float(market_cap or 0.0), 2)
+    STATE["volume_change_pct"] = round(float(volume_change or 0.0), 2)
     _last_helius_t = now
     
     if price and float(price) > 0:
-        print(f"[market_data] updated: price=${STATE['price_usd']}, mc=${STATE['market_cap_usd']:,.2f}")
+        print(f"[market_data] updated: price=${STATE['price_usd']:.8f}, mc=${STATE['market_cap_usd']:,.2f}, volume={STATE['volume_change_pct']:.2f}%")
     else:
         print(f"[market_data] failed to get price for token: {TOKEN_MINT}")
 
