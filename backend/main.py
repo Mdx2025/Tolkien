@@ -1,4 +1,227 @@
-# main.py
+Marcelo
+m…
+Online
+
+p… — 1:46 AM
+that is right
+it should be 44 chars
+I think u should stop streaming
+if u r editing
+Marcelo
+
+ — 1:47 AM
+How can I edit
+the mint address again
+Can't find it on enviroment
+p… — 1:47 AM
+go back to projects
+click on ur project
+left side
+Marcelo
+
+ — 1:47 AM
+alreight
+done
+p… — 1:47 AM
+dont edit
+stop stream
+O fuck ok
+Marcelo
+
+ — 1:48 AM
+Image
+I had this before
+i had pump
+is this the CA
+p… — 1:48 AM
+yea if that is the ca u r good
+Marcelo
+
+ — 1:48 AM
+OKAY
+let's see
+p… — 1:48 AM
+lemme c
+think so
+fuck my internet died
+Marcelo
+
+ — 1:48 AM
+Image
+But not updating stil
+p… — 1:49 AM
+takes a while
+lol u gotta redeploy
+Marcelo
+
+ — 1:49 AM
+Where
+p… — 1:49 AM
+on render
+Marcelo
+
+ — 1:49 AM
+I already did
+p… — 1:49 AM
+where you just updated the token mint
+yea ik
+yea
+Marcelo
+
+ — 1:49 AM
+Image
+p… — 1:49 AM
+it is deploying
+Marcelo
+
+ — 1:49 AM
+okay
+p… — 1:49 AM
+its like last time
+it takes a little
+Marcelo
+
+ — 1:50 AM
+okay
+How long it takes
+Sorry to bother u
+p… — 1:54 AM
+nah ur good im trying to figure it out rn
+R u sure u put the right helius api key?
+Marcelo
+
+ — 1:54 AM
+I can check yes
+p… — 1:54 AM
+ok
+Marcelo
+
+ — 1:55 AM
+Image
+I copy this part
+p… — 1:55 AM
+let me check
+Marcelo
+
+ — 1:55 AM
+Image
+p… — 1:55 AM
+Im trying with my key
+one sec
+Marcelo
+
+ — 1:56 AM
+ok
+p… — 1:58 AM
+looking into it
+dw I won't stop until it is fixed
+Marcelo
+
+ — 2:00 AM
+I see
+But I'm thinking to go to bed tbh
+p… — 2:00 AM
+10 mins I something is up with the helius api
+Marcelo
+
+ — 2:01 AM
+okay
+no prob
+p… — 2:01 AM
+U can go to bed if u want u can add me as collaborator on github
+wait send me the token mint
+Marcelo
+
+ — 2:02 AM
+EHu7quDpKf6gwbKQ5vWZBCcDWFRkfx6B9Pe5SGzupump
+p… — 2:02 AM
+not that
+the CA
+Marcelo
+
+ — 2:03 AM
+EHu7quDpKf6gwbKQ5vWZBCcDWFRkfx6B9Pe5SGzupump
+wait
+HVS3pH8ZNBAb7bHpbifvz5uiYDVffybcVvTJknTHxBiY
+Image
+Dex shows 3 type of address
+which one should be on it
+p… — 2:03 AM
+uhh lol
+i gotta check
+Marcelo
+
+ — 2:04 AM
+maybe
+that's why
+p… — 2:04 AM
+I'll check on solscan
+I think that is why lol
+Marcelo
+
+ — 2:04 AM
+yes haha
+p… — 2:04 AM
+cuz helius isnt finding anything
+from the key u sent me
+Marcelo
+
+ — 2:04 AM
+yes
+let me know then
+p… — 2:04 AM
+lemme check solscan lol
+Marcelo
+
+ — 2:05 AM
+okay
+p… — 2:06 AM
+o ya that is probably the issue
+Marcelo
+
+ — 2:07 AM
+so which one is
+https://dexscreener.com/solana/hv6x26ghknyukscevxreraqu8cljv8nkilbq1uebevzh
+DEX Screener
+Tolkien $0.0₄6079 - Tolkien Flywheel Live / SOL on Solana / PumpS...
+$0.00006079 Tolkien Flywheel Live (Tolkien) realtime price charts, trading history and info - Tolkien / SOL on Solana / PumpSwap
+Tolkien / SOL
+check the dex
+p… — 2:07 AM
+https://solana.com/developers/cookbook/tokens/get-token-mint
+How to Get a Token Mint
+Learn how to retrieve Solana token mint information, including supply, authority, and decimals.
+How to Get a Token Mint
+I have to run it
+to find it lol
+one sec
+Marcelo
+
+ — 2:07 AM
+okay
+p… — 2:14 AM
+HV6X26GhkNyUksCEVxReraQU8CLJV8nkiLBq1UEBEvzH
+
+this is the mint!
+and while you are at it replace main.py with:
+import os, time, random, requests
+from datetime import datetime, timezone
+from typing import Optional, Tuple
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+Expand
+message.txt
+15 KB
+Marcelo
+
+ — 2:15 AM
+doing so
+that's
+on the github?
+p… — 2:15 AM
+yep
+﻿
 import os, time, random, requests
 from datetime import datetime, timezone
 from typing import Optional, Tuple
@@ -124,50 +347,99 @@ def pump_portal_trade_local(data: dict) -> str:
     resp.raise_for_status()
     return _send_portal_tx_and_submit(resp.content)
 
-# ----- Helius market data (price + market cap) -----
+# ----- Market data from multiple sources -----
 _HELIUS_CACHE_TTL = 20  # seconds
 _last_helius_t = 0.0
 
+def _dexscreener_price_from_pair(pair_id: str) -> tuple[float, Optional[float]]:
+    """Return (price_usd, change_24h_pct|None) from DexScreener for a given pair id."""
+    try:
+        url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_id}"
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        if not data.get("pairs"):
+            return 0.0, None
+        p0 = data["pairs"][0]
+        price = float(p0.get("priceUsd") or 0.0)
+        chg = p0.get("priceChange24h")
+        chg = float(chg) if chg not in (None, "NaN") else None
+        return price, chg
+    except Exception as e:
+        print(f"[dexscreener] warn: {e}")
+        return 0.0, None
+
 def refresh_market_data():
-    """Refresh STATE.price_usd and STATE.market_cap_usd from Helius (cached briefly)."""
+    """Refresh STATE.price_usd / market_cap_usd using Helius, with DexScreener fallback."""
     global _last_helius_t
     now = time.time()
     if now - _last_helius_t < _HELIUS_CACHE_TTL:
         return
-    if not HELIUS_API_KEY:
-        # keep whatever we have; dev fallback (no API key)
-        return
 
-    url = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
-    payload = {
-        "jsonrpc": "2.0",
-        "id": "1",
-        "method": "getAsset",
-        "params": {
-            "id": TOKEN_MINT,
-            "displayOptions": {"showFungibleTokens": True}
-        }
-    }
-    try:
-        r = requests.post(url, json=payload, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        info = (data.get("result") or {}).get("token_info") or {}
-        price_info = info.get("price_info") or {}
-        supply = info.get("supply")
-        decimals = info.get("decimals", 0)
-        price = float(price_info.get("price_per_token") or 0.0)
-        adjusted_supply = float(supply or 0) / (10 ** int(decimals or 0))
-        mc = price * adjusted_supply
+    price = None
+    supply = None
+    decimals = 0
 
-        # store
-        STATE["price_usd"] = round(price, 8)
-        STATE["market_cap_usd"] = round(mc, 2)
+    # 1) Try Helius first (if key provided and not placeholder)
+    if HELIUS_API_KEY and HELIUS_API_KEY not in ["PLACEHOLDER", "YOUR_HELIUS_API_KEY_HERE"] and TOKEN_MINT:
+        try:
+            url = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
+            payload = {
+                "jsonrpc": "2.0", "id": "1", "method": "getAsset",
+                "params": {"id": TOKEN_MINT, "displayOptions": {"showFungibleTokens": True}}
+            }
+            r = requests.post(url, json=payload, timeout=20)
+            r.raise_for_status()
+            res = r.json().get("result") or {}
+            tinfo = res.get("token_info") or {}
+            pinfo = tinfo.get("price_info") or {}
+            price = pinfo.get("price_per_token")   # may be None
+            supply = tinfo.get("supply")
+            decimals = int(tinfo.get("decimals") or 0)
+            
+            if price and float(price) > 0:
+                print(f"[helius] success: price=${price}")
+            else:
+                print(f"[helius] no price data for token: {TOKEN_MINT}")
+                price = None
+        except Exception as e:
+            print(f"[helius] warn: {e}")
+            price = None
 
-        _last_helius_t = now
-    except Exception as e:
-        # soft-fail: keep old values
-        print(f"[helius] warn: {e}")
+    # 2) Fallback to DexScreener if needed
+    if price in (None, 0, 0.0):
+        # Use your known pair id - replace this with your actual pair ID
+        pair_id = "HV6X26GhkNyUksCEVxReraQU8CLJV8nkiLBq1UEBEvzH"
+        ds_price, chg24 = _dexscreener_price_from_pair(pair_id)
+        if ds_price > 0:
+            price = ds_price
+            # Optional: show change% on the UI
+            STATE["volume_change_pct"] = float(chg24 or 0.0)
+            print(f"[dexscreener] success: price=${price}, change24h={chg24}%")
+
+    # 3) Development fallback (if still no price and using placeholder token)
+    if price in (None, 0, 0.0) and TOKEN_MINT in ["THE_TOKEN_MINT_ADDRESS", "YOUR_TOKEN_MINT_ADDRESS_HERE", ""]:
+        price = 0.000123
+        supply = 1_000_000_000
+        decimals = 6
+        print("[mock] Using development mock data")
+
+    # 4) Compute market cap if we have supply + decimals
+    mc = 0.0
+    if price and supply is not None:
+        adjusted_supply = float(supply) / (10 ** decimals)
+        mc = float(price) * adjusted_supply
+        print(f"[market_data] computed MC: ${mc:,.2f} (price=${price}, supply={adjusted_supply:,.0f})")
+
+    # 5) Store results
+    STATE["price_usd"] = round(float(price or 0.0), 8)
+    STATE["market_cap_usd"] = round(mc, 2)
+    _last_helius_t = now
+    
+    if price and float(price) > 0:
+        print(f"[market_data] updated: price=${STATE['price_usd']}, mc=${STATE['market_cap_usd']}")
+    else:
+        print(f"[market_data] failed to get price for token: {TOKEN_MINT}")
 
 # ---------- Actions ----------
 def claim_creator_fees() -> Tuple[str, float]:
@@ -257,7 +529,7 @@ def process_goal_if_crossed():
         push_tx("buyback", 0.0, f"Buyback failed: {e}")
         return
 
-    # 3) Burn what we bought (record now; wire real burn later)
+    # 3) Burn what we bought
     try:
         burn_sig = burn_recently_bought(buy_amount)
         push_tx("burn", buy_amount, f"Burned tokens bought with {buy_amount} SOL", burn_sig)
@@ -284,7 +556,7 @@ class Dashboard(BaseModel):
 # ---------- Endpoints ----------
 @app.get("/dashboard", response_model=Dashboard)
 def get_dashboard():
-    # 1) Refresh price / MC from Helius (cached ~20s)
+    # 1) Refresh price / MC from multiple sources (cached ~20s)
     refresh_market_data()
 
     # 2) If a new +$100k bucket was crossed, run the pipeline
@@ -318,3 +590,30 @@ def bump_market_cap(delta_usd: float = 110_000):
 @app.get("/health")
 def health():
     return {"ok": True}
+
+# ---------- Debug endpoint ----------
+@app.get("/debug/market-data")
+def debug_market_data():
+    """Debug endpoint to check market data sources."""
+    debug_info = {
+        "token_mint": TOKEN_MINT,
+        "helius_api_key_set": bool(HELIUS_API_KEY and HELIUS_API_KEY != "PLACEHOLDER"),
+        "current_state": {
+            "price_usd": STATE["price_usd"],
+            "market_cap_usd": STATE["market_cap_usd"]
+        }
+    }
+    
+    # Force refresh market data for debugging
+    global _last_market_data_t
+    _last_market_data_t = 0  # Force refresh
+    refresh_market_data()
+    
+    debug_info["after_refresh"] = {
+        "price_usd": STATE["price_usd"],
+        "market_cap_usd": STATE["market_cap_usd"]
+    }
+    
+    return debug_info
+message.txt
+15 KB
