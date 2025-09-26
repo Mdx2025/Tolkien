@@ -17,6 +17,12 @@ const fmtPrice = (n) => {
   return '$0.00';
 };
 
+// ----- Cache helpers (avoid zero flicker) -----
+const CACHE_KEY = 'tolkien_dashboard_cache_v1';
+const loadCache = () => { try{ const s = localStorage.getItem(CACHE_KEY); return s? JSON.parse(s): null; }catch{ return null; } };
+const saveCache = (d) => { try{ localStorage.setItem(CACHE_KEY, JSON.stringify(d)); }catch{} };
+const isUsable = (d) => !!d && (Number(d.price_usd) > 0 || Number(d.market_cap_usd) > 0 || (Array.isArray(d.transactions) && d.transactions.length>0));
+
 function setWidth(el, pct){ if(!el) return; const v=Math.max(0, Math.min(100, Number(pct)||0)); el.style.width=`${v}%`; }
 
 function renderDashboard(d){
@@ -64,11 +70,18 @@ async function fetchDashboard(){
     const r = await fetch(`${API_BASE}/dashboard`, {cache:'no-store'});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    renderDashboard(data);
+    // Only render if usable. Persist last good.
+    if (isUsable(data)) {
+      saveCache(data);
+      renderDashboard(data);
+    }
   }catch(err){
     console.error('Fetch dashboard failed:', err);
   }
 }
 
+// Initial paint: use cache to avoid zero flicker
+const initial = loadCache();
+if (initial) renderDashboard(initial);
 fetchDashboard();
 setInterval(fetchDashboard, 5000);
