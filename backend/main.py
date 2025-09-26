@@ -179,6 +179,8 @@ def refresh_market_data():
 
     # Use DexScreener as primary source
     pair_id = "HV6X26GhkNyUksCEVxReraQU8CLJV8nkiLBq1UEBEvzH"
+    # The actual token mint (not the pair ID)
+    actual_token_mint = "EHu7quDpKf6gwbKQ5vWZBCcDWFRkfx6B9Pe5SGzupump"
     
     try:
         url = f"https://api.dexscreener.com/latest/dex/pairs/solana/{pair_id}"
@@ -192,15 +194,21 @@ def refresh_market_data():
             market_cap = float(pair.get("fdv", 0)) or float(pair.get("marketCap", 0))
             volume_change = pair.get("priceChange", {}).get("h24")  # 24h price change
             
-            # Prefer computing MC from on-chain supply so burns are included
-            supply_raw, supply_decimals = _rpc_token_supply(TOKEN_MINT) if TOKEN_MINT else (0.0, 0)
+            # Always compute MC from on-chain supply (includes burns) if available
+            supply_raw, supply_decimals = _rpc_token_supply(actual_token_mint)
             if price > 0 and supply_raw > 0:
                 supply_tokens = supply_raw / (10 ** supply_decimals)
                 market_cap = price * supply_tokens
-            elif not market_cap and price > 0:
-                # Fallback estimate if RPC supply missing
-                estimated_supply = 1_000_000_000
-                market_cap = price * estimated_supply
+                print(f"[market_cap] using on-chain supply: {supply_tokens:,.0f} tokens × ${price:.8f} = ${market_cap:,.2f}")
+            elif price > 0:
+                # Only use DexScreener MC if we can't get on-chain supply
+                if market_cap > 0:
+                    print(f"[market_cap] using DexScreener MC: ${market_cap:,.2f}")
+                else:
+                    # Last resort: estimate with 1B supply
+                    estimated_supply = 1_000_000_000
+                    market_cap = price * estimated_supply
+                    print(f"[market_cap] estimated with 1B supply: ${market_cap:,.2f}")
                 
             if volume_change is not None:
                 try:
@@ -234,8 +242,8 @@ def refresh_market_data():
         STATE["volume_change_pct"] = round(float(volume_change or 0.0), 2)
 
         # Compute supply burned % if we know initial supply and can fetch current supply
-        if TOKEN_MINT and TOKEN_INITIAL_SUPPLY > 0:
-            cur_raw, cur_dec = _rpc_token_supply(TOKEN_MINT)
+        if TOKEN_INITIAL_SUPPLY > 0:
+            cur_raw, cur_dec = _rpc_token_supply(actual_token_mint)
             if cur_raw > 0:
                 cur_tokens = cur_raw / (10 ** cur_dec)
                 burn_pct = max(0.0, min(100.0, (1.0 - (cur_tokens / float(TOKEN_INITIAL_SUPPLY))) * 100.0))
@@ -450,3 +458,23 @@ def dev_burn(adjust: DevAdjust):
     # Optionally nudge supply_burned_pct slightly to reflect action visually
     STATE["supply_burned_pct"] = round(min(100.0, STATE["supply_burned_pct"] + 0.01), 4)
     return {"ok": True, "burned_usd": STATE["burned_usd"]}
+
+@app.post("/dev/seed-history")
+def dev_seed_history():
+    """Seed some historical buyback/burn data for testing."""
+    # Add some historical transactions
+    push_tx("buyback", 2.5, "Historical buyback #1", "5K7...abc")
+    push_tx("burn", 1.8, "Historical burn #1", "3M9...def")
+    push_tx("buyback", 4.2, "Historical buyback #2", "7X2...ghi")
+    push_tx("burn", 3.1, "Historical burn #2", "9N4...jkl")
+    
+    # Update totals
+    STATE["buybacks_usd"] += 6.7  # 2.5 + 4.2
+    STATE["burned_usd"] += 4.9    # 1.8 + 3.1
+    
+    return {
+        "ok": True, 
+        "buybacks_usd": STATE["buybacks_usd"],
+        "burned_usd": STATE["burned_usd"],
+        "transactions_added": 4
+    }
