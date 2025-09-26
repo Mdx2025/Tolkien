@@ -201,11 +201,15 @@ def refresh_market_data():
         volume_change = 5.2
         print("[mock] Using development mock data")
 
-    # Store results
-    STATE["price_usd"] = round(float(price or 0.0), 12)  # More precision for small prices
-    STATE["market_cap_usd"] = round(float(market_cap or 0.0), 2)
-    STATE["volume_change_pct"] = round(float(volume_change or 0.0), 2)
-    _last_helius_t = now
+    # Store results only if we have a usable update to avoid zero flicker
+    if price and float(price) > 0:
+        STATE["price_usd"] = round(float(price), 12)  # More precision for small prices
+        STATE["market_cap_usd"] = round(float(market_cap or 0.0), 2)
+        STATE["volume_change_pct"] = round(float(volume_change or 0.0), 2)
+        _last_helius_t = now
+    else:
+        # Keep existing state; do not advance cache TTL so next call re-attempts soon
+        pass
     
     if price and float(price) > 0:
         print(f"[market_data] updated: price=${STATE['price_usd']:.8f}, mc=${STATE['market_cap_usd']:,.2f}, volume={STATE['volume_change_pct']:.2f}%")
