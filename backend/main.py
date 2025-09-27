@@ -66,7 +66,7 @@ STATE = {
     "tx": [],                  # recent transactions
 }
 
-GOAL_STEP = 100_000.0         # trigger size ($100k)
+GOAL_STEP = 50_000.0         # trigger size ($100k)
 LAMPORTS_PER_SOL = 1_000_000_000
 
 # ----- TX helpers -----
