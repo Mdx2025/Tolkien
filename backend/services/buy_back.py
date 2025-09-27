@@ -9,7 +9,7 @@ response = requests.post(url="https://pumpportal.fun/api/trade-local", data={
     "publicKey": "Your public key here",
     "action": "buy",             # "buy" or "sell"
     "mint": "token CA here",     # contract address of the token you want to trade
-    "amount": 100000,            # amount of SOL or tokens to trade
+    "amount": 50000,            # amount of SOL or tokens to trade
     "denominatedInSol": "false", # "true" if amount is amount of SOL, "false" if amount is number of tokens
     "slippage": 10,              # percent slippage allowed
     "priorityFee": 0.005,        # amount to use as priority fee
