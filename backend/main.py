@@ -388,7 +388,7 @@ def get_dashboard():
     mc = float(STATE["market_cap_usd"] or 0.0)
     bucket_start = (int(mc // GOAL_STEP)) * GOAL_STEP
     next_goal = bucket_start + GOAL_STEP
-    progress_pct = 0.0 if GOAL_STEP <= 0 else max(0.0, min(100.0, (mc - bucket_start) / GOAL_STEP * 100.0))
+    progress_pct = 0.0 if GOAL_STEP <= 0 else max(0.0, min(100.0, (mc - bucket_start) / GOAL_STEP * 50.0))
 
     return {
         "price_usd": STATE["price_usd"],
