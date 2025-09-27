@@ -4,7 +4,7 @@ A production-ready crypto dashboard that automatically executes buybacks and bur
 
 ## Features
 
-- **Automatic Goal Processing**: Triggers buyback/burn cycle every $100k market cap increase
+- **Automatic Goal Processing**: Triggers buyback/burn cycle every $50k market cap increase
 - **Real-time Price Data**: Fetches live data from Helius API
 - **Transaction History**: Displays recent claims, buybacks, and burns with Solscan links
 - **Progress Tracking**: Visual progress bars for next goal and supply burned
@@ -51,7 +51,7 @@ Optional:
 ## How It Works
 
 1. **Price Monitoring**: Every 5 seconds, fetches current price and market cap
-2. **Goal Detection**: Checks if market cap crossed a new $100k milestone
+2. **Goal Detection**: Checks if market cap crossed a new $50k milestone
 3. **Automated Execution**:
    - Claims creator fees from PumpPortal
    - Buys back tokens with 25% of claimed SOL
